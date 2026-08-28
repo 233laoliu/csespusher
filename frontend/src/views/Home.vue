@@ -38,7 +38,7 @@ onMounted(async () => {
     <p class="subtitle">为学校收集课程表，一键生成 CSES / ClassIsland / ClassWidgets 配置文件</p>
 
     <!-- 下载按钮 -->
-    <div class="grid cols-2" style="margin-bottom: 28px">
+    <div class="grid cols-3" style="margin-bottom: 28px">
       <div class="card">
         <div class="row">
           <div style="font-size: 28px">🏝️</div>
@@ -59,6 +59,17 @@ onMounted(async () => {
           </div>
           <div class="spacer"></div>
           <a class="btn primary" :href="site.downloads.classwidgets" target="_blank">下载 ClassWidgets</a>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div style="font-size: 28px">📄</div>
+          <div>
+            <div style="font-weight: 600; font-size: 16px">示例课程表</div>
+            <div class="muted">Excel 模板样例，管理员按此格式填写</div>
+          </div>
+          <div class="spacer"></div>
+          <a class="btn" href="/api/public/sample-excel" download="示例课程表.xlsx">下载示例 Excel</a>
         </div>
       </div>
     </div>

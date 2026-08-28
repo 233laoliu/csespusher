@@ -1,6 +1,7 @@
 """公开路由（未登录可用）：主页学校分组、分享页数据、配置下载。"""
 import json
 from collections import OrderedDict
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -25,6 +26,20 @@ def site_info():
             "classwidgets": app_config.CLASSWIDGETS_RELEASE_URL,
         },
     }
+
+
+@router.get("/sample-excel")
+def sample_excel():
+    """下载示例课程表 Excel（按格式约定填写的模板样例）。"""
+    # 仓库根目录下的 samples/sample_timetable.xlsx
+    path = Path(__file__).resolve().parent.parent.parent.parent / "samples" / "sample_timetable.xlsx"
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="示例文件不存在")
+    return Response(
+        content=path.read_bytes(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": _disposition("示例课程表.xlsx")},
+    )
 
 
 @router.get("/schools")
@@ -80,11 +95,12 @@ def school_public(school_id: int, db: Session = Depends(get_db)):
 def _disposition(filename: str) -> str:
     """同时提供 ASCII 回退文件名（含扩展名）与 RFC 5987 编码名，兼容所有浏览器。"""
     from urllib.parse import quote
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
     ascii_name = filename.encode("ascii", "ignore").decode("ascii")
-    # 中文剥离后若剩余部分过短/只剩符号，用通用回退名
-    stripped = ascii_name.replace("-", "").replace(".", "")
-    if not stripped:
-        ascii_name = "timetable." + filename.rsplit(".", 1)[-1]
+    stem = ascii_name.rsplit(".", 1)[0] if "." in ascii_name else ascii_name
+    # 纯中文名剥离后主体为空，用通用回退名
+    if not stem.strip():
+        ascii_name = "timetable." + ext if ext else "timetable"
     encoded = quote(filename, encoding="utf-8")
     return "attachment; filename=\"%s\"; filename*=UTF-8''%s" % (ascii_name, encoded)
 
