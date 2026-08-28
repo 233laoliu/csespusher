@@ -1,0 +1,11 @@
+fastapi==0.115.14
+uvicorn[standard]==0.30.6
+sqlalchemy==2.0.41
+greenlet==3.1.1
+pydantic==2.10.6
+openpyxl==3.1.5
+PyJWT==2.10.1
+PyYAML==6.0.2
+python-multipart==0.0.20
+python-dotenv==1.0.1
+email-validator==2.2.0
