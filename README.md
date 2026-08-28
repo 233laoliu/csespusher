@@ -3,16 +3,26 @@
 CSES / ClassIsland / ClassWidgets 课程表配置分发平台。
 
 为学校收集课程表（格式化 Excel），一键生成三种软件的配置文件，
-管理员创建带 token 的分享链接分发到每个班级，学生打开链接即可下载导入。
+管理员为每个班级生成固定分享链接与配置直链，学生打开即可下载导入。
 
 ## 功能
 
 - **未登录用户（游客）**：主页按 省/市/校 分组浏览已收集学校；
-  打开分享链接（带 token）可下载 CSES(.yaml) / ClassIsland(.json) / ClassWidgets(.json) 配置，
-  页面内也可直接下载两款软件本体
+  进入学校 → 点击班级即可查看课表预览，并下载三种格式配置；
+  也可通过管理员分发的分享链接获取配置
 - **普通管理员**：注册（邮箱+用户名）/ 验证码登录；创建学校、上传格式化 Excel、
-  编辑杂项配置、多用户协作、创建/复制分享链接
+  管理杂项配置（添加/编辑/删除/上传文件）、多用户协作、生成班级链接
 - **超级管理员**：普通管理员的全部权限 + 用户管理 + 平台运行状态
+
+## 链接体系
+
+- **班级页面**（公开）：`/class/{班级id}` —— 课表预览 + 下载 + 配置直链
+- **班级分享链接（固定唯一）**：`/share/{token}` —— 每个班级只有一个链接，
+  管理员重复生成返回同一个；课程表更新后链接不变
+- **配置直链（从互联网导入）**：
+  `/api/public/classes/{班级id}/raw/{cses|classisland|classwidgets}`
+  返回配置原文（带 CORS），可直接粘贴到软件「从互联网导入配置」功能中使用；
+  链接固定，课表更新后无需更换
 
 ## 技术栈
 
@@ -72,8 +82,9 @@ npm run build      # 构建到 frontend/dist，由后端自动托管（生产模
 - **ClassWidgets schedule**（JSON）：v1 格式（part / timeline / schedule），
   键 `0`..`6` 为周日..周六；配合软件内置导入使用
 
-杂项配置（config 的 AB/AC 列 + 管理页编辑）用于存放软件独有配置
+杂项配置（config 的 AB/AC 列）用于存放软件独有配置
 （如 ClassIsland 主题、ClassWidgets 提示音），下载时以响应头 `X-Extra-Config-Keys` 附带键名。
+管理员可在网页上添加 / 编辑 / 删除杂项配置，或直接上传 `.json/.txt/.yaml` 等配置文件作为配置值。
 
 ## 目录结构
 
@@ -86,7 +97,7 @@ backend/
     excel_parser.py    # Excel 格式解析
     converters.py      # -> cses / classisland / classwidgets
 frontend/
-  src/views/           # Home / SharePage / Auth / Admin / Super ...
+  src/views/           # Home / SchoolPublic / ClassPublic / SharePage / Auth / Admin / Super
 samples/               # 示例课程表
 scripts/               # 示例生成脚本
 ```
