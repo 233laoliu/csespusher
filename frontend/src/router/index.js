@@ -8,6 +8,7 @@ const routes = [
   { path: '/share/:token', name: 'share', component: () => import('../views/SharePage.vue') },
   { path: '/login', name: 'login', component: () => import('../views/Auth.vue') },
   { path: '/register', name: 'register', component: () => import('../views/Auth.vue') },
+  { path: '/forgot', name: 'forgot', component: () => import('../views/Auth.vue') },
   { path: '/admin', name: 'admin', component: () => import('../views/Admin.vue'), meta: { auth: true } },
   { path: '/super', name: 'super', component: () => import('../views/Super.vue'), meta: { auth: true } },
 ]

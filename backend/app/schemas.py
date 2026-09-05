@@ -15,12 +15,18 @@ class RegisterRequest(BaseModel):
 
 class SendCodeRequest(BaseModel):
     email: str
-    purpose: str = "login"  # login | register
+    purpose: str = "register"  # register | reset
 
 
 class LoginRequest(BaseModel):
     email: str
-    code: str
+    password: str = Field(min_length=6, max_length=128)
+
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    code: str = Field(min_length=6, max_length=20)
+    password: str = Field(min_length=6, max_length=128)
 
 
 class UserOut(BaseModel):

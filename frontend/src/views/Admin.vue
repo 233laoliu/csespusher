@@ -6,6 +6,7 @@ const schools = ref([])
 const error = ref('')
 const info = ref('')
 const busy = ref(false)
+const ntpBusy = ref(false)   // NTP 操作独立 busy，避免被学校详情加载流程抢占
 
 const showCreate = ref(false)
 const form = ref({ name: '', province: '', city: '' })
@@ -77,13 +78,13 @@ async function loadNtp() {
 
 async function saveNtp(payload, okMsg) {
   error.value = ''; info.value = ''
-  busy.value = true
+  ntpBusy.value = true
   try {
     applyNtp(await api('/api/admin/schools/' + current.value.id + '/ntp',
       { method: 'PUT', body: payload }))
     if (okMsg) info.value = okMsg
-  } catch (e) { error.value = e.message }
-  busy.value = false
+  } catch (e) { error.value = e.message; info.value = '' }
+  ntpBusy.value = false
 }
 
 function enableNtp() { return saveNtp({ enabled: true, daily_offset_ms: 0 }, '已启用该校 NTP 服务') }
@@ -104,33 +105,35 @@ function savePort() {
 }
 async function calibrateNtp() {
   error.value = ''; info.value = ''
-  busy.value = true
+  ntpBusy.value = true
   try {
     applyNtp(await api('/api/admin/schools/' + current.value.id + '/ntp/calibrate',
       { method: 'POST', body: { school_time: calibrateTime.value } }))
     info.value = '已按 ' + calibrateTime.value + ' 校准，当前偏差 ' + fmtOffset(ntp.value.current_offset_ms)
-  } catch (e) { error.value = e.message }
-  busy.value = false
+  } catch (e) { error.value = e.message; info.value = '' }
+  ntpBusy.value = false
 }
 async function resetNtp() {
   if (!confirm('把累计偏差清零（保留每日偏移量）？')) return
   error.value = ''; info.value = ''
-  busy.value = true
+  ntpBusy.value = true
   try {
     applyNtp(await api('/api/admin/schools/' + current.value.id + '/ntp/reset', { method: 'POST' }))
     info.value = '偏差已清零'
-  } catch (e) { error.value = e.message }
-  busy.value = false
+  } catch (e) { error.value = e.message; info.value = '' }
+  ntpBusy.value = false
 }
 async function removeNtp() {
   if (!confirm('删除该校的 NTP 服务并释放端口？')) return
   error.value = ''; info.value = ''
+  ntpBusy.value = true
   try {
     await api('/api/admin/schools/' + current.value.id + '/ntp', { method: 'DELETE' })
     ntp.value = await api('/api/admin/schools/' + current.value.id + '/ntp')
     ntpBase.value = 0
     info.value = 'NTP 服务已删除'
-  } catch (e) { error.value = e.message }
+  } catch (e) { error.value = e.message; info.value = '' }
+  ntpBusy.value = false
 }
 function fillCurrentSchoolTime() {
   const t = new Date(ntpBase.value + (Date.now() - ntpFetchedAt.value))
@@ -437,12 +440,12 @@ onUnmounted(() => { if (clockTimer) clearInterval(clockTimer) })
           <span class="tag gray" v-else-if="ntp && ntp.exists && ntp.enabled">未监听</span>
           <span class="tag gray" v-else-if="ntp && ntp.exists">已停用</span>
           <div class="spacer"></div>
-          <button v-if="ntp && !ntp.exists" class="btn small primary" :disabled="busy"
+          <button v-if="ntp && !ntp.exists" class="btn small primary" :disabled="ntpBusy"
                   @click="enableNtp">＋ 启用 NTP 服务</button>
           <template v-else-if="ntp">
-            <button class="btn small" :disabled="busy" @click="toggleNtp">
+            <button class="btn small" :disabled="ntpBusy" @click="toggleNtp">
               {{ ntp.enabled ? '停用' : '启用' }}</button>
-            <button class="btn small danger" :disabled="busy" @click="removeNtp">删除</button>
+            <button class="btn small danger" :disabled="ntpBusy" @click="removeNtp">删除</button>
           </template>
         </div>
         <p class="muted" style="margin: 8px 0 12px">
@@ -471,7 +474,7 @@ onUnmounted(() => { if (clockTimer) clearInterval(clockTimer) })
             <span style="min-width: 120px" class="muted">每日偏移量</span>
             <input class="input" style="max-width: 130px" v-model="ntpForm.dailySeconds" placeholder="0" />
             <span class="muted">秒 / 天（学校时钟走快为正，走慢为负）</span>
-            <button class="btn small primary" :disabled="busy" @click="saveDailyOffset">保存</button>
+            <button class="btn small primary" :disabled="ntpBusy" @click="saveDailyOffset">保存</button>
           </div>
 
           <div class="row" style="margin-bottom: 10px">
@@ -479,10 +482,10 @@ onUnmounted(() => { if (clockTimer) clearInterval(clockTimer) })
             <select class="input" style="max-width: 220px" v-model="ntpForm.timezone">
               <option v-for="tz in ntp.timezones" :key="tz.name" :value="tz.name">{{ tz.label }}</option>
             </select>
-            <button class="btn small primary" :disabled="busy" @click="saveTimezone">保存</button>
+            <button class="btn small primary" :disabled="ntpBusy" @click="saveTimezone">保存</button>
             <span class="muted">端口</span>
             <input class="input" style="max-width: 110px" type="number" v-model="ntpForm.port" />
-            <button class="btn small" :disabled="busy" @click="savePort">修改</button>
+            <button class="btn small" :disabled="ntpBusy" @click="savePort">修改</button>
           </div>
 
           <div class="row" style="margin-bottom: 4px">
@@ -502,10 +505,10 @@ onUnmounted(() => { if (clockTimer) clearInterval(clockTimer) })
             </p>
             <div class="row">
               <input class="input" style="max-width: 150px" v-model="calibrateTime" placeholder="HH:MM:SS" />
-              <button class="btn small primary" :disabled="busy || !calibrateTime" @click="calibrateNtp">
+              <button class="btn small primary" :disabled="ntpBusy || !calibrateTime" @click="calibrateNtp">
                 按此时间校准</button>
               <button class="btn small" @click="fillCurrentSchoolTime">填入当前学校时间</button>
-              <button class="btn small" :disabled="busy" @click="resetNtp">偏差清零</button>
+              <button class="btn small" :disabled="ntpBusy" @click="resetNtp">偏差清零</button>
             </div>
           </div>
         </template>
