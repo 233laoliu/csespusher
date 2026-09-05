@@ -17,5 +17,8 @@ COPY backend/ ./backend/
 COPY --from=frontend-build /build/frontend/dist ./frontend/dist
 ENV PORT=8765
 EXPOSE 8765
+# NTP 时间同步：每校一个 UDP 端口（默认 NTP_BASE_PORT=11123，容量 256）
+# 运行时记得用 -p 11123-11378:11123-11378/udp 放行；不需要的话设 NTP_ENABLED=0
+EXPOSE 11123-11378/udp
 # uvicorn 需在 backend/ 下才能导入 app 包；前端由 FastAPI 静态托管
 CMD ["sh", "-c", "cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8765}"]

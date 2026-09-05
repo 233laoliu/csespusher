@@ -4,12 +4,13 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from .. import config as app_config
 from ..converters import GENERATORS, build_day_events
 from ..db import get_db
+from ..ntp import brief_for_school, public_host
 from ..models import DaySchedule, ExtraConfig, Grade, School, SchoolClass, SchoolConfig, ShareLink
 
 router = APIRouter(prefix="/api/public", tags=["public"])
@@ -151,7 +152,7 @@ def _load_class_cells(db: Session, school: School, cls_id: int):
 # ---------------- 公开班级页 ----------------
 
 @router.get("/classes/{class_id}")
-def class_public(class_id: int, db: Session = Depends(get_db)):
+def class_public(class_id: int, request: Request, db: Session = Depends(get_db)):
     """公开班级页数据：学校/班级信息 + 可用下载格式。"""
     cls = db.get(SchoolClass, class_id)
     if cls is None:
@@ -165,6 +166,7 @@ def class_public(class_id: int, db: Session = Depends(get_db)):
                    "province": school.province, "city": school.city},
         "has_excel": cfg is not None,
         "formats": ["cses", "classisland", "classwidgets"] if cfg else [],
+        "ntp": brief_for_school(db, school.id, public_host(request)),
     }
 
 
@@ -256,7 +258,7 @@ def _resolve_link(token: str, db: Session):
 
 
 @router.get("/share/{token}")
-def share_page(token: str, db: Session = Depends(get_db)):
+def share_page(token: str, request: Request, db: Session = Depends(get_db)):
     """分享页数据：学校/班级信息 + 可用的下载格式。"""
     link, school = _resolve_link(token, db)
     cfg = db.query(SchoolConfig).filter(SchoolConfig.school_id == school.id).first()
@@ -276,6 +278,7 @@ def share_page(token: str, db: Session = Depends(get_db)):
         "classes": classes,
         "has_excel": cfg is not None,
         "formats": ["cses", "classisland", "classwidgets"] if cfg else [],
+        "ntp": brief_for_school(db, school.id, public_host(request)),
         "downloads": {
             "classisland": app_config.CLASSISLAND_RELEASE_URL,
             "classwidgets": app_config.CLASSWIDGETS_RELEASE_URL,

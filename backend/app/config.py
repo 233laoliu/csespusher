@@ -48,6 +48,17 @@ SUPERADMIN_EMAIL = _get("SUPERADMIN_EMAIL").strip().lower()
 SUPERADMIN_USERNAME = _get("SUPERADMIN_USERNAME", "超级管理员")
 
 CONTACT_EMAIL = _get("CONTACT_EMAIL")
+
+# ---------------- NTP 时间同步 ----------------
+# 每校一个 UDP 端口的 NTP 服务 + HTTP 时间接口，用于把软件时间对齐到学校铃声
+NTP_ENABLED = _get("NTP_ENABLED", "1") == "1"
+NTP_HOST = _get("NTP_HOST", "0.0.0.0")            # UDP 监听地址
+NTP_BASE_PORT = _get_int("NTP_BASE_PORT", 11123)  # 起始端口，按学校顺序分配
+NTP_MAX_SERVERS = _get_int("NTP_MAX_SERVERS", 256)
+# 对外展示用的主机名/IP（部署在反向代理后必填），留空则用请求的 Host
+NTP_PUBLIC_HOST = _get("NTP_PUBLIC_HOST").strip()
+NTP_DEFAULT_TIMEZONE = _get("NTP_DEFAULT_TIMEZONE", "Asia/Shanghai")
+NTP_REFRESH_SECONDS = _get_int("NTP_REFRESH_SECONDS", 30)  # 配置热更新间隔
 GITHUB_URL = _get("GITHUB_URL", "https://github.com/SmartTeachCN/CSES")
 CLASSISLAND_RELEASE_URL = _get(
     "CLASSISLAND_RELEASE_URL", "https://github.com/ClassIsland/ClassIsland/releases/latest"

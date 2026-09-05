@@ -42,6 +42,17 @@ async function copyRaw(fmt) {
   }
   setTimeout(() => { notice.value = '' }, 4000)
 }
+
+const ntpNotice = ref('')
+async function copyText(text, msg) {
+  try {
+    await navigator.clipboard.writeText(text)
+    ntpNotice.value = msg
+  } catch (e) {
+    ntpNotice.value = text
+  }
+  setTimeout(() => { ntpNotice.value = '' }, 4000)
+}
 </script>
 
 <template>
@@ -77,6 +88,29 @@ async function copyRaw(fmt) {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <div class="card mt" v-if="info.ntp && info.ntp.enabled">
+          <h3 style="margin: 0 0 6px">时间同步（对齐学校打铃）</h3>
+          <p class="muted" style="margin: 0 0 10px">
+            学校打铃系统每天会走偏一点，把下面任意一个地址填进软件的时间同步设置，
+            软件时间就会跟着学校铃声走。
+          </p>
+          <div v-if="ntpNotice" class="msg ok">{{ ntpNotice }}</div>
+          <div class="row" style="margin-bottom: 8px">
+            <span style="min-width: 110px" class="muted">NTP 地址</span>
+            <code>{{ info.ntp.address }}</code>
+            <button class="btn small" @click="copyText(info.ntp.address, '已复制 NTP 地址')">复制</button>
+          </div>
+          <div class="row">
+            <span style="min-width: 110px" class="muted">校时接口</span>
+            <code class="raw-url">{{ location.origin }}{{ info.ntp.http_time_url }}</code>
+            <button class="btn small"
+                    @click="copyText(location.origin + info.ntp.http_time_url, '已复制校时接口')">复制</button>
+          </div>
+          <div class="muted" style="margin-top: 8px">
+            当前学校时间 {{ info.ntp.local }}（{{ info.ntp.timezone }}）
+          </div>
         </div>
 
         <div class="card mt" v-if="preview">

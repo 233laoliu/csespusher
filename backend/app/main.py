@@ -5,6 +5,7 @@
     uvicorn app.main:app --reload --port 8000
 """
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -14,12 +15,31 @@ from fastapi.staticfiles import StaticFiles
 from . import config as app_config
 from .db import Base, SessionLocal, engine
 from .models import User  # noqa: F401  确保模型注册
-from .models import SchoolConfig, ExtraConfig, SchoolMember, ShareLink  # noqa: F401
+from .models import SchoolConfig, ExtraConfig, SchoolMember, ShareLink, NtpServer  # noqa: F401
+from .ntp import ntp_service
 from .routers import admin, auth, public, super as super_router
+from .routers import ntp as ntp_router
 from .security import password_digest
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """启动时拉起每校独立的 NTP 服务，关闭时释放全部 UDP 端口。"""
+    if app_config.NTP_ENABLED:
+        try:
+            await ntp_service.start()
+        except Exception as e:  # 端口被占用等不应拖垮 Web 服务
+            print("[csespusher] NTP 服务启动失败：%r" % (e,))
+    else:
+        print("[csespusher] NTP 服务已通过 NTP_ENABLED=0 关闭")
+    yield
+    if app_config.NTP_ENABLED:
+        await ntp_service.stop()
+
+
 app = FastAPI(title="csespusher", version="0.1.0",
-              description="CSES / ClassIsland / ClassWidgets 课程表配置分发平台")
+              description="CSES / ClassIsland / ClassWidgets 课程表配置分发平台",
+              lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,6 +80,8 @@ app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(public.router)
 app.include_router(super_router.router)
+app.include_router(ntp_router.admin_router)
+app.include_router(ntp_router.public_router)
 
 
 @app.get("/api/health")

@@ -11,7 +11,8 @@ CSES / ClassIsland / ClassWidgets 课程表配置分发平台。
   进入学校 → 点击班级即可查看课表预览，并下载三种格式配置；
   也可通过管理员分发的分享链接获取配置
 - **普通管理员**：注册（邮箱+用户名）/ 验证码登录；创建学校、上传格式化 Excel、
-  管理杂项配置（添加/编辑/删除/上传文件）、多用户协作、生成班级链接
+  管理杂项配置（添加/编辑/删除/上传文件）、多用户协作、生成班级链接、
+  为学校开启 NTP 时间同步（每日偏移 / 手动校准，对齐打铃）
 - **超级管理员**：普通管理员的全部权限 + 用户管理 + 平台运行状态
 
 ## 链接体系
@@ -86,6 +87,37 @@ npm run build      # 构建到 frontend/dist，由后端自动托管（生产模
 （如 ClassIsland 主题、ClassWidgets 提示音），下载时以响应头 `X-Extra-Config-Keys` 附带键名。
 管理员可在网页上添加 / 编辑 / 删除杂项配置，或直接上传 `.json/.txt/.yaml` 等配置文件作为配置值。
 
+## NTP 时间同步（对齐学校打铃）
+
+学校的打铃母钟往往每天固定走快/走慢若干秒，几周后铃声就和软件里的时间对不上。
+为此每所学校可以开一个**独立的时间源**：
+
+- 管理页 → 进入学校 → **「NTP 时间同步」卡片**：启用后自动分配端口
+  （默认从 `11123` 起按学校顺序分配，可改），并实时显示当前偏差与学校时间；
+- **每日偏移量**（秒/天，正负皆可）—— 学校时钟每天的漂移速度，系统按线性漂移持续累积；
+- **手动校准** —— 对着学校时钟把表盘读数填进去，一键抹平累计误差，
+  每日偏移量保持不变；也可「偏差清零」重新开始。
+
+NTP 报文本身不带学校标识，所以**每校独占一个 UDP 端口**。
+两条客户端途径，任选其一：
+
+1. **NTP（UDP）**：把 `主机:端口` 填进支持自定义端口的时间同步客户端。
+   校园 Linux/路由设备可用 chrony / ntpd：`server <主机> port <端口>`；
+   Windows 自带的 w32time 只能连 123 端口——单校部署时把 `NTP_BASE_PORT` 改成
+   `123` 即可原生使用，多校时用第三方客户端（NetTime、Meinberg NTP 等）。
+2. **HTTP 校时**：`GET /api/public/ntp/{token}/time` 返回该校当前时间
+   （`unix_ms` 已含偏移），供软件自行校表；地址在管理页与班级页可复制。
+
+注意：
+
+- 累计偏差很大时（ntp 客户端默认 panic 阈值 1000 秒），个别客户端会拒绝跳变，
+  保持每日偏移在合理范围内并定期校准即可；
+- 部署时记得放行 UDP 端口（Docker：`EXPOSE 11123-11378/udp`，
+  运行时 `-p 11123-11378:11123-11378/udp`），反向代理后请配置 `NTP_PUBLIC_HOST`；
+- 不需要此功能时设 `NTP_ENABLED=0`；多 worker 部署会端口冲突，请保持单进程；
+- 改动会在管理页保存时立即生效，另有 `NTP_REFRESH_SECONDS` 周期兜底热更新；
+- 可用 `scripts/ntp_selftest.py` 离线自检引擎（建临时库，不影响线上数据）。
+
 ## 目录结构
 
 ```
@@ -93,11 +125,12 @@ backend/
   app/
     main.py            # FastAPI 入口（自动建表、超管初始化、静态托管）
     models.py          # SQLAlchemy 模型
-    routers/           # auth / admin / public / super
+    ntp.py             # NTP 引擎：偏移计算 / 报文编解码 / 多端口 UDP 服务
+    routers/           # auth / admin / public / super / ntp
     excel_parser.py    # Excel 格式解析
     converters.py      # -> cses / classisland / classwidgets
 frontend/
   src/views/           # Home / SchoolPublic / ClassPublic / SharePage / Auth / Admin / Super
 samples/               # 示例课程表
-scripts/               # 示例生成脚本
+scripts/               # 示例生成脚本 / NTP 自检
 ```

@@ -4,8 +4,20 @@ import { api } from '../api'
 
 const stats = ref(null)
 const users = ref([])
+const ntpStatus = ref(null)
 const error = ref('')
 const info = ref('')
+
+function fmtOffset(ms) {
+  if (ms == null) return '—'
+  const s = ms / 1000
+  const a = Math.abs(s)
+  const sign = s >= 0 ? '+' : '−'
+  if (a < 60) return sign + a.toFixed(1) + ' 秒'
+  if (a < 3600) return sign + (a / 60).toFixed(1) + ' 分钟'
+  if (a < 86400) return sign + (a / 3600).toFixed(2) + ' 小时'
+  return sign + (a / 86400).toFixed(2) + ' 天'
+}
 
 async function load() {
   error.value = ''
@@ -13,6 +25,7 @@ async function load() {
     stats.value = await api('/api/super/stats')
     users.value = await api('/api/super/users')
   } catch (e) { error.value = e.message }
+  try { ntpStatus.value = await api('/api/admin/ntp/status') } catch (e) { /* 不影响主流程 */ }
 }
 
 async function setRole(u, role) {
@@ -56,6 +69,43 @@ onMounted(load)
       <div class="card"><div class="muted">用户总数</div><div style="font-size: 26px; font-weight: 600">{{ stats.users_total }}</div></div>
       <div class="card"><div class="muted">学校总数</div><div style="font-size: 26px; font-weight: 600">{{ stats.schools_total }}</div></div>
       <div class="card"><div class="muted">分享链接（本周新增）</div><div style="font-size: 26px; font-weight: 600">{{ stats.shares_total }} <span class="muted" style="font-size:14px">(+{{ stats.shares_week }})</span></div></div>
+    </div>
+
+    <div v-if="ntpStatus" class="card" style="margin-bottom: 24px">
+      <div class="row">
+        <h3 style="margin: 0">NTP 时间同步服务</h3>
+        <span class="tag" v-if="ntpStatus.running">运行中</span>
+        <span class="tag gray" v-else>未运行</span>
+        <div class="spacer"></div>
+        <span class="muted">基础端口 {{ ntpStatus.base_port }}<template v-if="ntpStatus.host"> · 对外主机 {{ ntpStatus.host }}</template></span>
+      </div>
+      <p class="muted" style="margin: 6px 0 12px">
+        每所学校一个 UDP 端口，把「真实时间 + 该校累积偏移」广播出去，用于对齐学校打铃。
+      </p>
+      <div v-if="!ntpStatus.service_enabled" class="msg info">
+        当前部署通过 NTP_ENABLED=0 关闭了 NTP 服务。
+      </div>
+      <table class="table">
+        <thead><tr><th>学校</th><th>端口</th><th>监听</th><th>查询数</th><th>每日偏移</th><th>当前偏差</th><th>学校时间</th></tr></thead>
+        <tbody>
+          <tr v-for="s in ntpStatus.servers" :key="s.id">
+            <td style="font-weight: 500">{{ s.school_name }}</td>
+            <td><code>{{ s.port }}</code></td>
+            <td>
+              <span class="tag" v-if="s.listening">正常</span>
+              <span class="tag gray" v-else-if="s.error" :title="s.error">异常</span>
+              <span class="tag gray" v-else>停用</span>
+            </td>
+            <td>{{ s.queries }}<span class="muted" v-if="s.unique_clients">（{{ s.unique_clients }} 个来源）</span></td>
+            <td>{{ fmtOffset(s.daily_offset_ms) }} / 天</td>
+            <td>{{ fmtOffset(s.current_offset_ms) }}</td>
+            <td class="muted">{{ s.school_time }}</td>
+          </tr>
+          <tr v-if="!ntpStatus.servers.length">
+            <td colspan="7" class="muted">还没有学校启用 NTP 服务。</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <div class="card">

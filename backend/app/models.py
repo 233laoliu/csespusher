@@ -79,6 +79,9 @@ class School(Base):
         order_by="Grade.sort_order",
     )
     shares = relationship("ShareLink", back_populates="school", cascade="all, delete-orphan")
+    ntp = relationship(
+        "NtpServer", back_populates="school", uselist=False, cascade="all, delete-orphan",
+    )
 
 
 class Grade(Base):
@@ -165,6 +168,40 @@ class SchoolMember(Base):
     user = relationship("User")
 
     __table_args__ = (UniqueConstraint("school_id", "user_id", name="uq_school_member"),)
+
+
+class NtpServer(Base):
+    """每校独立的时间源：把真实时间按「每日偏移量」换算成该校铃声时间。
+
+    偏移量模型（线性漂移）：
+        offset(t) = base_offset_ms + daily_offset_ms * (t - base_time) / 86400s
+    即 base_time 时刻已有 base_offset_ms 的偏差，之后每过 24 小时再累积
+    daily_offset_ms。学校时钟走快取正值，走慢取负值。
+    管理员随时可以「手动校准」：把当前实测到的学校时间回填，
+    系统会重算 base_offset_ms 并把 base_time 推进到此刻，daily_offset_ms 保持不变。
+    """
+
+    __tablename__ = "ntp_servers"
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), unique=True,
+                       nullable=False, index=True)
+    # HTTP 时间接口用的对外标识（不直接暴露学校 id）
+    token = Column(String(64), unique=True, index=True, nullable=False,
+                   default=lambda: secrets.token_urlsafe(16))
+    # 每校独占一个 UDP 端口 —— NTP 报文里没有学校标识，只能靠端口区分
+    port = Column(Integer, unique=True, nullable=False)
+    enabled = Column(Boolean, nullable=False, default=True)
+    daily_offset_ms = Column(Integer, nullable=False, default=0)
+    base_offset_ms = Column(Integer, nullable=False, default=0)
+    base_time = Column(DateTime, nullable=False, default=utcnow)  # 基准时刻（UTC）
+    timezone = Column(String(64), nullable=False, default="Asia/Shanghai")
+    note = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    school = relationship("School", back_populates="ntp")
 
 
 class ShareLink(Base):

@@ -6,6 +6,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from .. import config as app_config
 from .. import schemas
 from ..db import get_db
 from ..deps import can_edit_school, require_admin
@@ -14,6 +15,7 @@ from ..models import (
     DaySchedule,
     ExtraConfig,
     Grade,
+    NtpServer,
     School,
     SchoolClass,
     SchoolConfig,
@@ -21,6 +23,7 @@ from ..models import (
     ShareLink,
     User,
 )
+from ..ntp import ntp_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -104,8 +107,8 @@ def update_school(school_id: int, body: schemas.SchoolUpdate, db: Session = Depe
 
 
 @router.delete("/schools/{school_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_school(school_id: int, db: Session = Depends(get_db),
-                  user: User = Depends(require_admin)):
+async def delete_school(school_id: int, db: Session = Depends(get_db),
+                        user: User = Depends(require_admin)):
     school = _get_school_or_404(db, school_id)
     if user.role != "superadmin" and school.owner_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "只有创建者或超管可以删除学校")
@@ -113,7 +116,10 @@ def delete_school(school_id: int, db: Session = Depends(get_db),
     db.query(SchoolMember).filter(SchoolMember.school_id == school_id).delete()
     db.query(SchoolConfig).filter(SchoolConfig.school_id == school_id).delete()
     db.query(ExtraConfig).filter(ExtraConfig.school_id == school_id).delete()
+    db.query(NtpServer).filter(NtpServer.school_id == school_id).delete()
     db.commit()
+    if app_config.NTP_ENABLED:
+        await ntp_service.refresh()  # 释放该校占用的 UDP 端口
 
 
 @router.post("/schools/{school_id}/grades", status_code=status.HTTP_201_CREATED)

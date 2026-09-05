@@ -119,6 +119,33 @@ class ShareOut(BaseModel):
     created_at: datetime
 
 
+# ---------- NTP 时间同步 ----------
+
+
+class NtpServerUpdate(BaseModel):
+    """创建 / 更新学校 NTP 服务（只传需要改的字段）。
+
+    daily_offset_ms：每 24 小时累积的偏移量（毫秒），走快为正、走慢为负。
+    """
+
+    enabled: Optional[bool] = None
+    daily_offset_ms: Optional[int] = None
+    timezone: Optional[str] = None
+    port: Optional[int] = None
+    note: Optional[str] = None
+
+
+class NtpCalibrateRequest(BaseModel):
+    """手动校准：填入学校时钟此刻显示的时间。
+
+    school_time 支持 "HH:MM:SS"（默认今天）或 "YYYY-MM-DD HH:MM:SS"。
+    keep_daily_offset 为 True 时保留每日偏移量，只把当前累积误差吸收进基准偏移。
+    """
+
+    school_time: str
+    keep_daily_offset: bool = True
+
+
 # ---------- 管理概览 ----------
 
 

@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api'
 
 const schools = ref([])
@@ -20,6 +20,133 @@ const newExtraKey = ref('')
 const newExtraValue = ref('')
 const extraKeyInput = ref('')
 const extraFileInput = ref(null)
+
+// ---------------- NTP 时间同步 ----------------
+const ntp = ref(null)
+const ntpForm = ref({ dailySeconds: 0, timezone: 'Asia/Shanghai', port: null })
+const calibrateTime = ref('')
+const ntpBase = ref(0)        // 取回时服务端的学校时间（unix ms）
+const ntpFetchedAt = ref(0)   // 取回时刻（客户端）
+const nowTick = ref(Date.now())
+let clockTimer = null
+
+function fmtOffset(ms) {
+  if (ms == null) return '—'
+  const s = ms / 1000
+  const sign = s >= 0 ? '+' : '−'
+  const a = Math.abs(s)
+  if (a < 60) return sign + a.toFixed(1) + ' 秒'
+  if (a < 3600) return sign + (a / 60).toFixed(1) + ' 分钟'
+  if (a < 86400) return sign + (a / 3600).toFixed(2) + ' 小时'
+  return sign + (a / 86400).toFixed(2) + ' 天'
+}
+
+function showTime(ms, tz) {
+  try {
+    return new Date(ms).toLocaleTimeString('zh-CN',
+      { hour12: false, timeZone: tz || undefined })
+  } catch (e) {
+    return new Date(ms).toLocaleTimeString('zh-CN', { hour12: false })
+  }
+}
+
+// 学校时间 = 取回时的服务端学校时间 + 之后本地流逝的时间（偏移变化极慢，够用）
+const schoolClock = computed(() => {
+  if (!ntpBase.value) return '—'
+  return showTime(ntpBase.value + (nowTick.value - ntpFetchedAt.value),
+    ntp.value && ntp.value.timezone)
+})
+const realClock = computed(() => showTime(nowTick.value, ntp.value && ntp.value.timezone))
+
+function applyNtp(data) {
+  ntp.value = data
+  if (data && data.exists) {
+    ntpBase.value = data.school_unix_ms
+    ntpFetchedAt.value = Date.now()
+    ntpForm.value = {
+      dailySeconds: data.daily_offset_ms / 1000,
+      timezone: data.timezone,
+      port: data.port,
+    }
+  }
+}
+
+async function loadNtp() {
+  applyNtp(await api('/api/admin/schools/' + current.value.id + '/ntp'))
+}
+
+async function saveNtp(payload, okMsg) {
+  error.value = ''; info.value = ''
+  busy.value = true
+  try {
+    applyNtp(await api('/api/admin/schools/' + current.value.id + '/ntp',
+      { method: 'PUT', body: payload }))
+    if (okMsg) info.value = okMsg
+  } catch (e) { error.value = e.message }
+  busy.value = false
+}
+
+function enableNtp() { return saveNtp({ enabled: true, daily_offset_ms: 0 }, '已启用该校 NTP 服务') }
+function toggleNtp() {
+  return saveNtp({ enabled: !ntp.value.enabled },
+    ntp.value.enabled ? '已停用' : '已启用')
+}
+function saveDailyOffset() {
+  const sec = parseFloat(ntpForm.value.dailySeconds)
+  if (isNaN(sec)) { error.value = '每日偏移量需要填数字'; return }
+  return saveNtp({ daily_offset_ms: Math.round(sec * 1000) }, '已保存每日偏移量')
+}
+function saveTimezone() { return saveNtp({ timezone: ntpForm.value.timezone }, '已保存时区') }
+function savePort() {
+  const port = parseInt(ntpForm.value.port, 10)
+  if (!port || port < 1 || port > 65535) { error.value = '端口需要在 1~65535 之间'; return }
+  return saveNtp({ port }, '端口已更新为 ' + port)
+}
+async function calibrateNtp() {
+  error.value = ''; info.value = ''
+  busy.value = true
+  try {
+    applyNtp(await api('/api/admin/schools/' + current.value.id + '/ntp/calibrate',
+      { method: 'POST', body: { school_time: calibrateTime.value } }))
+    info.value = '已按 ' + calibrateTime.value + ' 校准，当前偏差 ' + fmtOffset(ntp.value.current_offset_ms)
+  } catch (e) { error.value = e.message }
+  busy.value = false
+}
+async function resetNtp() {
+  if (!confirm('把累计偏差清零（保留每日偏移量）？')) return
+  error.value = ''; info.value = ''
+  busy.value = true
+  try {
+    applyNtp(await api('/api/admin/schools/' + current.value.id + '/ntp/reset', { method: 'POST' }))
+    info.value = '偏差已清零'
+  } catch (e) { error.value = e.message }
+  busy.value = false
+}
+async function removeNtp() {
+  if (!confirm('删除该校的 NTP 服务并释放端口？')) return
+  error.value = ''; info.value = ''
+  try {
+    await api('/api/admin/schools/' + current.value.id + '/ntp', { method: 'DELETE' })
+    ntp.value = await api('/api/admin/schools/' + current.value.id + '/ntp')
+    ntpBase.value = 0
+    info.value = 'NTP 服务已删除'
+  } catch (e) { error.value = e.message }
+}
+function fillCurrentSchoolTime() {
+  const t = new Date(ntpBase.value + (Date.now() - ntpFetchedAt.value))
+  const p = n => String(n).padStart(2, '0')
+  try {
+    // 按学校时区取表盘读数，避免管理员看的是另一个时区
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      hour12: false, timeZone: ntp.value.timezone,
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(t)
+    const get = type => (parts.find(x => x.type === type) || {}).value || '00'
+    calibrateTime.value = get('hour') + ':' + get('minute') + ':' + get('second')
+  } catch (e) {
+    calibrateTime.value = p(t.getHours()) + ':' + p(t.getMinutes()) + ':' + p(t.getSeconds())
+  }
+}
 
 async function load() {
   error.value = ''
@@ -45,7 +172,16 @@ async function openSchool(s) {
     const rows = await api('/api/admin/schools/' + s.id + '/extra-configs')
     extras.value = rows.map(r => ({ ...r, valueRaw: typeof r.value === 'string' ? r.value : JSON.stringify(r.value) }))
     members.value = await api('/api/admin/schools/' + s.id + '/members')
+    ntpBase.value = 0
+    calibrateTime.value = ''
+    await loadNtp()
   } catch (e) { error.value = e.message }
+}
+
+function backToList() {
+  current.value = null
+  ntp.value = null
+  ntpBase.value = 0
 }
 
 async function upload() {
@@ -179,12 +315,16 @@ async function deleteSchool(s) {
   if (!confirm('删除学校「' + s.name + '」及其全部数据？此操作不可恢复。')) return
   try {
     await api('/api/admin/schools/' + s.id, { method: 'DELETE' })
-    current.value = null
+    backToList()
     await load()
   } catch (e) { error.value = e.message }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  clockTimer = setInterval(() => { nowTick.value = Date.now() }, 1000)
+})
+onUnmounted(() => { if (clockTimer) clearInterval(clockTimer) })
 </script>
 
 <template>
@@ -229,7 +369,7 @@ onMounted(load)
 
     <div v-else>
       <div class="row">
-        <button class="btn" @click="current = null">← 返回</button>
+        <button class="btn" @click="backToList">← 返回</button>
         <h2 style="margin: 0; font-size: 20px">{{ current.name }}</h2>
         <span class="tag gray">{{ current.province }} {{ current.city }}</span>
         <div class="spacer"></div>
@@ -287,6 +427,90 @@ onMounted(load)
                   @click="createShare(c.id)">
             {{ shareByClassId()[c.id] ? '✓ ' : '＋ ' }}{{ c.grade }} {{ c.name }}
           </button>
+        </div>
+      </div>
+
+      <div class="card mt">
+        <div class="row">
+          <h3 style="margin: 0">NTP 时间同步（对齐学校铃声）</h3>
+          <span class="tag" v-if="ntp && ntp.exists && ntp.enabled && ntp.listening">运行中</span>
+          <span class="tag gray" v-else-if="ntp && ntp.exists && ntp.enabled">未监听</span>
+          <span class="tag gray" v-else-if="ntp && ntp.exists">已停用</span>
+          <div class="spacer"></div>
+          <button v-if="ntp && !ntp.exists" class="btn small primary" :disabled="busy"
+                  @click="enableNtp">＋ 启用 NTP 服务</button>
+          <template v-else-if="ntp">
+            <button class="btn small" :disabled="busy" @click="toggleNtp">
+              {{ ntp.enabled ? '停用' : '启用' }}</button>
+            <button class="btn small danger" :disabled="busy" @click="removeNtp">删除</button>
+          </template>
+        </div>
+        <p class="muted" style="margin: 8px 0 12px">
+          为这所学校单开一个时间源：对外广播的时间 = 真实时间 + 累积偏移，
+          学生机同步后就能和打铃对上。NTP 报文不带学校标识，靠端口区分学校，
+          所以每校独占一个端口。
+        </p>
+        <div v-if="ntp && ntp.service_enabled === false" class="msg info">
+          当前部署没有启用 NTP 服务（NTP_ENABLED=0），配置会保存，但不会真正监听端口。
+        </div>
+
+        <template v-if="ntp && ntp.exists">
+          <div class="row" style="margin-bottom: 10px">
+            <span style="min-width: 120px" class="muted">NTP 地址</span>
+            <code>{{ ntp.ntp_address }}</code>
+            <button class="btn small" @click="copyText(ntp.ntp_address, '已复制 NTP 地址')">复制</button>
+          </div>
+          <div class="row" style="margin-bottom: 10px">
+            <span style="min-width: 120px" class="muted">HTTP 校时接口</span>
+            <code style="font-size: 12px">{{ location.origin }}{{ ntp.http_time_url }}</code>
+            <button class="btn small"
+                    @click="copyText(location.origin + ntp.http_time_url, '已复制校时接口')">复制</button>
+          </div>
+
+          <div class="row" style="margin-bottom: 10px">
+            <span style="min-width: 120px" class="muted">每日偏移量</span>
+            <input class="input" style="max-width: 130px" v-model="ntpForm.dailySeconds" placeholder="0" />
+            <span class="muted">秒 / 天（学校时钟走快为正，走慢为负）</span>
+            <button class="btn small primary" :disabled="busy" @click="saveDailyOffset">保存</button>
+          </div>
+
+          <div class="row" style="margin-bottom: 10px">
+            <span style="min-width: 120px" class="muted">学校时区</span>
+            <select class="input" style="max-width: 220px" v-model="ntpForm.timezone">
+              <option v-for="tz in ntp.timezones" :key="tz.name" :value="tz.name">{{ tz.label }}</option>
+            </select>
+            <button class="btn small primary" :disabled="busy" @click="saveTimezone">保存</button>
+            <span class="muted">端口</span>
+            <input class="input" style="max-width: 110px" type="number" v-model="ntpForm.port" />
+            <button class="btn small" :disabled="busy" @click="savePort">修改</button>
+          </div>
+
+          <div class="row" style="margin-bottom: 4px">
+            <span style="min-width: 120px" class="muted">当前偏差</span>
+            <strong>{{ fmtOffset(ntp.current_offset_ms) }}</strong>
+            <div class="spacer"></div>
+            <span class="muted">学校时间&nbsp;
+              <strong style="font-family: Consolas, monospace">{{ schoolClock }}</strong>
+              （真实 {{ realClock }}）
+            </span>
+          </div>
+
+          <div style="border-top: 1px solid rgba(0,0,0,0.08); margin-top: 12px; padding-top: 12px">
+            <div style="font-weight: 600; margin-bottom: 6px">手动校准</div>
+            <p class="muted" style="margin: 0 0 8px">
+              照着学校时钟把表盘读数填进去（{{ ntp.timezone }}），一键抹平累计误差，每日偏移量保持不变。
+            </p>
+            <div class="row">
+              <input class="input" style="max-width: 150px" v-model="calibrateTime" placeholder="HH:MM:SS" />
+              <button class="btn small primary" :disabled="busy || !calibrateTime" @click="calibrateNtp">
+                按此时间校准</button>
+              <button class="btn small" @click="fillCurrentSchoolTime">填入当前学校时间</button>
+              <button class="btn small" :disabled="busy" @click="resetNtp">偏差清零</button>
+            </div>
+          </div>
+        </template>
+        <div v-else-if="ntp" class="muted">
+          启用后会分配端口 {{ ntp.suggested_port }}（之后可改）。每个学生机只需同步一次。
         </div>
       </div>
 
