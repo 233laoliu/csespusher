@@ -150,6 +150,9 @@ def public_brief(row: "NtpServer", host: str) -> dict:
         "daily_offset_ms": row.daily_offset_ms,
         "local": format_local(school_ts, row.timezone),
         "unix_ms": int(round(school_ts * 1000)),
+        # UDP 服务是否真的在跑。Railway / 多数 PaaS 不转发 UDP，
+        # 此时 NTP_ENABLED=0，address 是连不通的，前端据此只展示 HTTP 校时接口。
+        "service_enabled": app_config.NTP_ENABLED,
     }
 
 

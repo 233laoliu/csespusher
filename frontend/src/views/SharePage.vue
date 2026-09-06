@@ -124,7 +124,7 @@ async function copyText(text, msg) {
           </p>
           <div v-if="data.ntp && data.ntp.enabled">
             <div v-if="ntpNotice" class="msg ok">{{ ntpNotice }}</div>
-            <div class="row" style="margin-bottom: 8px">
+            <div class="row" style="margin-bottom: 8px" v-if="data.ntp.service_enabled !== false">
               <span style="min-width: 110px" class="muted">NTP 地址</span>
               <code>{{ data.ntp.address }}</code>
               <button class="btn small" @click="copyText(data.ntp.address, '已复制 NTP 地址')">复制</button>

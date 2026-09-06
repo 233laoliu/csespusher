@@ -103,7 +103,7 @@ async function copyText(text, msg) {
             软件时间就会跟着学校铃声走。
           </p>
           <div v-if="ntpNotice" class="msg ok">{{ ntpNotice }}</div>
-          <div class="row" style="margin-bottom: 8px">
+          <div class="row" style="margin-bottom: 8px" v-if="info.ntp.service_enabled !== false">
             <span style="min-width: 110px" class="muted">NTP 地址</span>
             <code>{{ info.ntp.address }}</code>
             <button class="btn small" @click="copyText(info.ntp.address, '已复制 NTP 地址')">复制</button>
