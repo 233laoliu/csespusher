@@ -18,7 +18,16 @@ export async function api(path, { method = 'GET', body, form } = {}) {
   if (!resp.ok) {
     let detail = await resp.text()
     try { detail = JSON.parse(detail).detail || detail } catch (e) {}
-    throw new Error(detail || ('HTTP ' + resp.status))
+    const msg = detail || ('HTTP ' + resp.status)
+    // 登录态失效（token 缺失/过期）时，清掉本地 token 并跳回登录页，
+    // 避免所有写操作静默失败（表现为“无法创建学校/无法创建 NTP/进学校空白”）。
+    if (resp.status === 401) {
+      setToken('')
+      if (typeof location !== 'undefined' && !location.pathname.startsWith('/login')) {
+        location.href = '/login?next=' + encodeURIComponent(location.pathname)
+      }
+    }
+    throw new Error(msg)
   }
   return ctype.includes('application/json') ? resp.json() : resp.text()
 }

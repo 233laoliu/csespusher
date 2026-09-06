@@ -167,18 +167,34 @@ async function createSchool() {
   busy.value = false
 }
 
+let openSeq = 0   // 防止快速切换学校时旧请求覆盖新数据（表现为空白/错乱）
 async function openSchool(s) {
+  const seq = ++openSeq
   error.value = ''; info.value = ''
+  // 先清空上一所学校的残留，避免瞬间闪现旧数据或被旧响应覆盖
+  current.value = null
+  shares.value = []; extras.value = []; members.value = []; ntp.value = null
+  ntpBase.value = 0; calibrateTime.value = ''
   try {
-    current.value = await api('/api/admin/schools/' + s.id)
-    shares.value = await api('/api/admin/schools/' + s.id + '/shares')
-    const rows = await api('/api/admin/schools/' + s.id + '/extra-configs')
-    extras.value = rows.map(r => ({ ...r, valueRaw: typeof r.value === 'string' ? r.value : JSON.stringify(r.value) }))
-    members.value = await api('/api/admin/schools/' + s.id + '/members')
-    ntpBase.value = 0
-    calibrateTime.value = ''
-    await loadNtp()
-  } catch (e) { error.value = e.message }
+    const detail = await api('/api/admin/schools/' + s.id)
+    if (seq !== openSeq) return
+    current.value = detail
+    const [sh, ex, mb, nt] = await Promise.all([
+      api('/api/admin/schools/' + s.id + '/shares'),
+      api('/api/admin/schools/' + s.id + '/extra-configs'),
+      api('/api/admin/schools/' + s.id + '/members'),
+      api('/api/admin/schools/' + s.id + '/ntp'),
+    ])
+    if (seq !== openSeq) return
+    shares.value = sh
+    extras.value = ex.map(r => ({ ...r, valueRaw: typeof r.value === 'string' ? r.value : JSON.stringify(r.value) }))
+    members.value = mb
+    applyNtp(nt)
+  } catch (e) {
+    if (seq !== openSeq) return
+    error.value = e.message
+    current.value = null
+  }
 }
 
 function backToList() {

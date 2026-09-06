@@ -105,4 +105,9 @@ if _dist.exists():
         # /api 路由已优先匹配；其余路径返回 index.html 交给前端路由
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404)
-        return FileResponse(str(_index))
+        # index.html 不缓存：前端每次构建产物哈希会变，必须让浏览器重新校验，
+        # 否则会一直用旧的 index.html（及其引用的旧 JS），出现“改了却没生效”。
+        return FileResponse(
+            str(_index),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
