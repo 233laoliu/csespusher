@@ -13,6 +13,8 @@ const form = ref({ name: '', province: '', city: '' })
 
 const current = ref(null)
 const shares = ref([])
+
+const origin = location.origin
 const extras = ref([])
 const members = ref([])
 const newMemberEmail = ref('')
@@ -251,7 +253,7 @@ async function removeShare(s) {
   } catch (e) { error.value = e.message }
 }
 
-function shareUrl(s) { return location.origin + '/share/' + s.token }
+function shareUrl(s) { return origin + '/share/' + s.token }
 
 async function copyText(text, msg) {
   try { await navigator.clipboard.writeText(text); info.value = msg }
@@ -431,7 +433,7 @@ onUnmounted(() => { if (clockTimer) clearInterval(clockTimer) })
               <td class="row" style="gap: 6px">
                 <button class="btn small" @click="copyLink(s)">复制分享页</button>
                 <button v-if="s.class_id" class="btn small"
-                        @click="copyText(location.origin + '/api/public/classes/' + s.class_id + '/raw/classisland', '已复制配置直链')">
+                        @click="copyText(origin + '/api/public/classes/' + s.class_id + '/raw/classisland', '已复制配置直链')">
                   复制直链
                 </button>
                 <button class="btn small danger" @click="removeShare(s)">删除</button>
@@ -481,9 +483,9 @@ onUnmounted(() => { if (clockTimer) clearInterval(clockTimer) })
           </div>
           <div class="row" style="margin-bottom: 10px">
             <span style="min-width: 120px" class="muted">HTTP 校时接口</span>
-            <code style="font-size: 12px">{{ location.origin }}{{ ntp.http_time_url }}</code>
+            <code style="font-size: 12px">{{ origin }}{{ ntp.http_time_url }}</code>
             <button class="btn small"
-                    @click="copyText(location.origin + ntp.http_time_url, '已复制校时接口')">复制</button>
+                    @click="copyText(origin + ntp.http_time_url, '已复制校时接口')">复制</button>
           </div>
 
           <div class="row" style="margin-bottom: 10px">

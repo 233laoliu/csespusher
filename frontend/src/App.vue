@@ -37,7 +37,7 @@ function logout() { setToken(''); me.value = null; window.dispatchEvent(new Even
     </nav>
   </header>
 
-  <router-view :key="$route.fullPath" />
+  <router-view />
 
   <footer class="footer">
     <span>© csespusher</span>

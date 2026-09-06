@@ -11,6 +11,11 @@ const classId = ref(null)
 const preview = ref(null)
 const busy = ref(false)
 
+// Vue 3 SFC <script setup> 的 mustache 表达式会被编译为 setup 暴露属性；
+// `location` 是 window 全局不会被代理,模板里直接写 {{ location.origin }} 会抛
+// "Cannot read properties of undefined"。显式声明一次解决。
+const origin = location.origin
+
 const isWholeSchool = computed(() => data.value && !data.value.classes.length)
 const effectiveClassId = computed(() => {
   if (!data.value) return null
@@ -46,7 +51,7 @@ function download(fmt) {
 
 const notice = ref('')
 function rawUrl(fmt) {
-  return location.origin + '/api/public/classes/' + effectiveClassId.value + '/raw/' + fmt
+  return origin + '/api/public/classes/' + effectiveClassId.value + '/raw/' + fmt
 }
 async function copyRaw(fmt) {
   try {
@@ -126,9 +131,9 @@ async function copyText(text, msg) {
             </div>
             <div class="row" style="margin-bottom: 8px">
               <span style="min-width: 110px" class="muted">校时接口</span>
-              <code style="font-size: 12px">{{ location.origin }}{{ data.ntp.http_time_url }}</code>
-              <button class="btn small"
-                      @click="copyText(location.origin + data.ntp.http_time_url, '已复制校时接口')">复制</button>
+<code style="font-size: 12px">{{ origin }}{{ data.ntp.http_time_url }}</code>
+                <button class="btn small"
+                        @click="copyText(origin + data.ntp.http_time_url, '已复制校时接口')">复制</button>
             </div>
             <div class="muted">
               当前学校时间 {{ data.ntp.local }}（{{ data.ntp.timezone }}）

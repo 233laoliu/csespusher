@@ -12,6 +12,12 @@ const notice = ref('')
 const FORMAT_LABELS = { cses: 'CSES', classisland: 'ClassIsland', classwidgets: 'ClassWidgets' }
 const FORMAT_EXT = { cses: 'yaml', classisland: 'json', classwidgets: 'json' }
 
+// Vue 3 SFC <script setup> 的模板编译会把 mustache 表达式收集为 setup 暴露属性。
+// `location` 是 window 全局,setup 不会代理它,所以模板里直接写 {{ location.origin }}
+// 会让渲染函数访问 setupState.location（undefined）→ .origin 抛错。
+// 显式声明一次,模板/事件处理器/函数体内都能直接用。
+const origin = location.origin
+
 function downloadClass(fmt) {
   const name = info.value
     ? `${info.value.school.name}-${info.value.grade.name}-${info.value.class.name}.${FORMAT_EXT[fmt]}`
@@ -29,7 +35,7 @@ onMounted(async () => {
 })
 
 function rawUrl(fmt) {
-  return location.origin + '/api/public/classes/' + route.params.id + '/raw/' + fmt
+  return origin + '/api/public/classes/' + route.params.id + '/raw/' + fmt
 }
 
 async function copyRaw(fmt) {
@@ -104,9 +110,9 @@ async function copyText(text, msg) {
           </div>
           <div class="row">
             <span style="min-width: 110px" class="muted">校时接口</span>
-            <code class="raw-url">{{ location.origin }}{{ info.ntp.http_time_url }}</code>
+            <code class="raw-url">{{ origin }}{{ info.ntp.http_time_url }}</code>
             <button class="btn small"
-                    @click="copyText(location.origin + info.ntp.http_time_url, '已复制校时接口')">复制</button>
+                    @click="copyText(origin + info.ntp.http_time_url, '已复制校时接口')">复制</button>
           </div>
           <div class="muted" style="margin-top: 8px">
             当前学校时间 {{ info.ntp.local }}（{{ info.ntp.timezone }}）

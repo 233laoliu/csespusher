@@ -11,3 +11,9 @@ backend/server.log
 # Office lock files
 ~$*
 /sample_timetable.xlsx
+
+# WorkBuddy 项目数据（含工作日志，不入库）
+.workbuddy/
+
+# 临时生成的课表产物
+/红星高级中学-高二课表.xlsx
